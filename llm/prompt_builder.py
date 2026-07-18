@@ -1,11 +1,21 @@
 class PromptBuilder:
 
+    SYSTEM_PROMPT = (
+        "You are an expert SBI Loan Advisor. "
+        "Answer ONLY using the provided context. "
+        "If the answer is not present in the context, reply exactly: "
+        '"I could not find this information in the provided documents." '
+        "Do not make up information."
+    )
+
     @staticmethod
     def build(query, chunks):
 
         context = ""
 
-        for chunk, score in chunks:
+        for item in chunks:
+
+            chunk = item[0] if isinstance(item, tuple) else item
 
             context += f"""
 Page: {chunk.page}
@@ -16,27 +26,13 @@ Page: {chunk.page}
 
 """
 
-        prompt = f"""
-You are an expert SBI Loan Advisor.
-
-Use ONLY the provided context.
-
-If the answer is not available,
-reply exactly:
-
-"I could not find this information in the provided documents."
-
-Never make up information.
-
-Question:
-
+        prompt = f"""Question:
 {query}
 
 Context:
-
 {context}
 
 Answer:
 """
 
-        return prompt
+        return PromptBuilder.SYSTEM_PROMPT, prompt

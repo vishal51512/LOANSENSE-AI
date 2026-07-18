@@ -5,7 +5,7 @@ import torch
 
 class Reranker:
 
-    def __init__(self):
+    def __init__(self, max_documents=50):
 
         print("Loading Re-ranker...")
 
@@ -18,50 +18,36 @@ class Reranker:
         )
 
         self.model.eval()
+        self.max_documents = max_documents
 
-    def rerank(
-        self,
-        query,
-        documents,
-        top_k=5
-    ):
+    def rerank(self, query, documents, top_k=5):
+
+        if not documents:
+            return []
+
+        documents = documents[:self.max_documents]
 
         pairs = [
-
-            [query, doc.text]
-
-            for doc in documents
-
+            [query, item[0].text]
+            for item in documents
         ]
 
         with torch.no_grad():
 
             inputs = self.tokenizer(
-
                 pairs,
-
                 padding=True,
-
                 truncation=True,
-
                 return_tensors="pt",
-
                 max_length=512
-
             )
 
             scores = self.model(
                 **inputs
-            ).logits.squeeze()
+            ).logits.view(-1)
 
-        scored = list(
-            zip(
-                documents,
-                scores.tolist()
-            )
-        )
-
-        scored.sort(
+        scored = sorted(
+            zip(documents, scores.tolist()),
             key=lambda x: x[1],
             reverse=True
         )

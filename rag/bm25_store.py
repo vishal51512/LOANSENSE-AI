@@ -11,26 +11,18 @@ class BM25Store:
 
         self.documents = []
 
-    def build(self,
-              chunks):
+    def build(self, chunks):
 
         self.documents = chunks
 
         corpus = [
-
             chunk.text.lower().split()
-
             for chunk in chunks
-
         ]
 
-        self.model = BM25Okapi(
-            corpus
-        )
+        self.model = BM25Okapi(corpus)
 
-    def search(self,
-               query,
-               top_k=10):
+    def search(self, query, top_k=10):
 
         tokenized = query.lower().split()
 
@@ -39,53 +31,33 @@ class BM25Store:
         )
 
         ranked = sorted(
-
-            zip(
-                self.documents,
-                scores
-            ),
-
+            zip(self.documents, scores),
             key=lambda x: x[1],
-
             reverse=True
-
         )
 
         return ranked[:top_k]
 
-    def save(self,
-             folder="vector_store"):
+    def save(self, folder="vector_store"):
 
-        os.makedirs(folder,
-                    exist_ok=True)
+        os.makedirs(folder, exist_ok=True)
 
         joblib.dump(
-
             self.model,
-
-            f"{folder}/bm25.pkl"
-
+            os.path.join(folder, "bm25.pkl")
         )
 
         joblib.dump(
-
             self.documents,
-
-            f"{folder}/bm25_docs.pkl"
-
+            os.path.join(folder, "bm25_docs.pkl")
         )
 
-    def load(self,
-             folder="vector_store"):
+    def load(self, folder="vector_store"):
 
         self.model = joblib.load(
-
-            f"{folder}/bm25.pkl"
-
+            os.path.join(folder, "bm25.pkl")
         )
 
         self.documents = joblib.load(
-
-            f"{folder}/bm25_docs.pkl"
-
+            os.path.join(folder, "bm25_docs.pkl")
         )

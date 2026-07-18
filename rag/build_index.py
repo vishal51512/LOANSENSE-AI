@@ -9,56 +9,52 @@ from rag.bm25_store import BM25Store
 from rag.schemas import DocumentChunk
 
 
-print("Loading chunks...")
+def main():
+    print("Loading chunks...")
 
-with open(
+    with open(
         "metadata/home_loan_chunks.json",
         encoding="utf8"
-) as f:
+    ) as f:
 
-    raw = json.load(f)
+        raw = json.load(f)
 
-chunks = [
+    chunks = [
 
-    DocumentChunk(**item)
+        DocumentChunk(**item)
 
-    for item in raw
+        for item in raw
 
-]
+    ]
 
-texts = [
+    texts = [
 
-    chunk.text
+        chunk.text
 
-    for chunk in chunks
+        for chunk in chunks
 
-]
+    ]
 
-print(
-    f"{len(chunks)} chunks loaded."
-)
+    print(f"{len(chunks)} chunks loaded.")
 
-embedder = EmbeddingModel()
+    embedder = EmbeddingModel()
 
-embeddings = embedder.encode_documents(
-    texts
-)
+    embeddings = embedder.encode_documents(texts)
 
-vector_store = VectorStore()
+    vector_store = VectorStore()
 
-vector_store.build(
-    embeddings,
-    chunks
-)
+    vector_store.build(embeddings, chunks)
 
-vector_store.save()
+    vector_store.save()
 
-bm25 = BM25Store()
+    bm25 = BM25Store()
 
-bm25.build(
-    chunks
-)
+    bm25.build(chunks)
 
-bm25.save()
+    bm25.save()
 
-print("Done.")
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()

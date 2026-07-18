@@ -33,22 +33,28 @@ class HybridRetriever:
             top_k
         )
 
-        merged = {}
+        scores = {}
+        chunks = {}
+        k = 60  # RRF constant
 
-        for item in vector_results:
-
+        for rank, item in enumerate(vector_results):
             chunk = item["metadata"]
+            cid = chunk.chunk_id
+            chunks[cid] = chunk
+            scores[cid] = scores.get(cid, 0) + 1.0 / (k + rank + 1)
 
-            merged[
-                chunk.chunk_id
-            ] = chunk
+        for rank, (chunk, _) in enumerate(bm25_results):
+            cid = chunk.chunk_id
+            chunks[cid] = chunk
+            scores[cid] = scores.get(cid, 0) + 1.0 / (k + rank + 1)
 
-        for chunk, _ in bm25_results:
-
-            merged[
-                chunk.chunk_id
-            ] = chunk
-
-        return list(
-            merged.values()
+        ranked = sorted(
+            scores.items(),
+            key=lambda x: x[1],
+            reverse=True
         )
+
+        return [
+            (chunks[cid], score)
+            for cid, score in ranked[:top_k]
+        ]

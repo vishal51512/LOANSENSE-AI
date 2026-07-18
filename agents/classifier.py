@@ -1,15 +1,16 @@
+import re
+
+
 class QueryClassifier:
 
     def classify(self, question):
 
         q = question.lower()
 
-        if "emi" in q:
-
+        if re.search(r'\bemi\b', q):
             return "emi"
 
-        if "interest" in q:
-
+        if re.search(r'\binterest\s*(rate)?\b', q):
             return "interest"
 
         return "retrieval"

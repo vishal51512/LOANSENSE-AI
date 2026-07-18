@@ -1,27 +1,32 @@
+import json
+
 from llm.client import LLMClient
-
 from llm.prompt_builder import PromptBuilder
-
-llm = LLMClient()
 
 
 class ResponseAgent:
 
+    def __init__(self):
+        self.llm = LLMClient()
+
     def invoke(self, state):
+
+        system_prompt = None
 
         if "retrieved_docs" in state:
 
-            prompt = PromptBuilder.build(
+            system_prompt, prompt = PromptBuilder.build(
                 state["question"],
                 state["retrieved_docs"]
             )
 
         elif "interest_rate" in state:
 
-            prompt = f"""
-Current Interest Data
+            rate_info = json.dumps(state["interest_rate"], indent=2)
 
-{state['interest_rate']}
+            prompt = f"""Current Interest Data:
+
+{rate_info}
 
 Answer the user's question using only this information.
 
@@ -31,10 +36,11 @@ Question:
 
         elif "emi" in state:
 
-            prompt = f"""
-EMI Information
+            emi_info = json.dumps(state["emi"], indent=2)
 
-{state['emi']}
+            prompt = f"""EMI Information:
+
+{emi_info}
 
 Question:
 {state['question']}
@@ -42,13 +48,15 @@ Question:
 
         else:
 
-            prompt = f"""
-Question:
+            prompt = f"""Question:
 {state['question']}
 
 No additional context is available.
 """
 
-        state["answer"] = llm.generate(prompt)
+        state["answer"] = self.llm.generate(
+            prompt,
+            system_prompt=system_prompt
+        )
 
         return state
