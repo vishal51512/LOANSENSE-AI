@@ -47,7 +47,7 @@ class Reranker:
             ).logits.view(-1)
 
         scored = sorted(
-            zip(documents, scores.tolist()),
+            ((item[0], float(score)) for item, score in zip(documents, scores.tolist())),
             key=lambda x: x[1],
             reverse=True
         )

@@ -1,5 +1,5 @@
 import streamlit as st
-from frontend.api import upload
+from api import upload
 
 st.title("📄 Upload PDF")
 

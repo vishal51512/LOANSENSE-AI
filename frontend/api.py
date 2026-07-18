@@ -1,6 +1,6 @@
 import requests
 
-from frontend.config import API_URL
+from config import API_URL
 
 
 def _request(method, path, **kwargs):

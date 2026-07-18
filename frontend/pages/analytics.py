@@ -1,6 +1,6 @@
 import streamlit as st
 
-from frontend.api import stats
+from api import stats
 
 stats_data = stats()
 

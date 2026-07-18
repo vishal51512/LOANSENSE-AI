@@ -1,6 +1,6 @@
 import streamlit as st
 
-from frontend.api import chat
+from api import chat
 
 st.title("💬 LoanSense AI Chat")
 

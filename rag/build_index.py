@@ -1,59 +1,52 @@
-import json
+"""Build a clean search index from every PDF in the project knowledge base."""
 
-from rag.embedding import EmbeddingModel
-
-from rag.vector_store import VectorStore
+from pathlib import Path
 
 from rag.bm25_store import BM25Store
+from rag.embedding import EmbeddingModel
+from rag.pipeline import RAGPipeline
+from rag.vector_store import VectorStore
 
-from rag.schemas import DocumentChunk
+
+DOCUMENT_FOLDERS = (Path("data"), Path("uploads"))
 
 
 def main():
-    print("Loading chunks...")
-
-    with open(
-        "metadata/home_loan_chunks.json",
-        encoding="utf8"
-    ) as f:
-
-        raw = json.load(f)
-
-    chunks = [
-
-        DocumentChunk(**item)
-
-        for item in raw
-
+    pdf_paths = [
+        path
+        for folder in DOCUMENT_FOLDERS
+        if folder.is_dir()
+        for path in sorted(folder.glob("*.pdf"))
     ]
 
-    texts = [
+    if not pdf_paths:
+        raise FileNotFoundError("No PDFs found in data/ or uploads/.")
 
-        chunk.text
+    pipeline = RAGPipeline()
+    chunks = []
 
-        for chunk in chunks
+    for pdf_path in pdf_paths:
+        document_chunks = pipeline.process_pdf(
+            pdf_path, bank="SBI", loan_type="Home Loan"
+        )
+        chunks.extend(document_chunks)
+        print(f"Processed {pdf_path}: {len(document_chunks)} chunks")
 
-    ]
-
-    print(f"{len(chunks)} chunks loaded.")
+    if not chunks:
+        raise ValueError("No text chunks could be extracted from the available PDFs.")
 
     embedder = EmbeddingModel()
-
-    embeddings = embedder.encode_documents(texts)
+    embeddings = embedder.encode_documents([chunk.text for chunk in chunks])
 
     vector_store = VectorStore()
-
     vector_store.build(embeddings, chunks)
-
     vector_store.save()
 
     bm25 = BM25Store()
-
     bm25.build(chunks)
-
     bm25.save()
 
-    print("Done.")
+    print(f"Built indexes containing {len(chunks)} chunks.")
 
 
 if __name__ == "__main__":

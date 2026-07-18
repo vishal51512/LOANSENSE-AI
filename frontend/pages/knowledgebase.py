@@ -1,8 +1,8 @@
 import streamlit as st
 
-from frontend.api import knowledge
+from api import knowledge
 
-from frontend.api import documents
+from api import documents
 
 st.title("📚 Knowledge Base")
 

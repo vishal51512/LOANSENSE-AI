@@ -13,6 +13,8 @@ class VectorStore:
 
     def build(self, embeddings, metadata):
 
+        self._validate_metadata(metadata)
+
         # IndexFlatIP is cosine similarity only when embeddings are unit-normalized.
         assert np.allclose(
             np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-3
@@ -50,6 +52,8 @@ class VectorStore:
             os.path.join(folder, "metadata.pkl")
         )
 
+        self._validate_metadata(self.metadata)
+
     def search(self, query_embedding, top_k=10):
 
         scores, indices = self.index.search(
@@ -78,6 +82,22 @@ class VectorStore:
                 "Vector index is not loaded. Call build() or load() first."
             )
 
+        self._validate_metadata(metadata)
+
         self.index.add(embeddings)
 
         self.metadata.extend(metadata)
+
+    @staticmethod
+    def _validate_metadata(metadata):
+        """Ensure every indexed item is a chunk that retrieval can identify."""
+        invalid = next(
+            (item for item in metadata if not hasattr(item, "chunk_id")),
+            None
+        )
+
+        if invalid is not None:
+            raise ValueError(
+                "Vector index metadata contains non-chunk records. "
+                "Rebuild it with `python -m rag.build_index`."
+            )
