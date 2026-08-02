@@ -1,0 +1,17 @@
+{
+  "description": "Populate relevant_chunk_ids using chunk IDs from vector_store metadata.",
+  "queries": [
+    {
+      "question": "What is the LTV ratio for loans up to Rs.20 Lacs?",
+      "relevant_chunk_ids": [
+        "SBI_home_loan_00001"
+      ]
+    },
+    {
+      "question": "Is fixed rate available?",
+      "relevant_chunk_ids": [
+        "SBI_home_loan_00003"
+      ]
+    }
+  ]
+}
