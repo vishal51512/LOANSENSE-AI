@@ -78,7 +78,23 @@ def main() -> None:
         print(json.dumps(report, indent=2))
         return
 
-    rag = RAGEngine()
+    try:
+        rag = RAGEngine()
+    except Exception as exc:
+        report = {
+            "status": "not_measured",
+            "reason": (
+                "RAG model dependencies could not be loaded. "
+                "Ensure Hugging Face model download access is available. "
+                f"Current error: {exc}"
+            ),
+            "queries": queries,
+        }
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps(report, indent=2))
+        return
     groq_client = Groq(api_key=api_key)
     model = "llama-3.3-70b-versatile"
 

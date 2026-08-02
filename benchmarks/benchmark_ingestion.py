@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import faiss
+import numpy as np
 
 from rag.bm25_store import BM25Store
 from rag.chunker import ChunkGenerator
@@ -44,8 +45,6 @@ def run_once(project_root: Path, pdf_paths: list[Path]) -> dict:
     loader = PDFLoader()
     processor = TextProcessor()
     chunker = ChunkGenerator()
-    embedder = EmbeddingModel()
-
     t_total_start = time.perf_counter()
 
     t_parse_start = time.perf_counter()
@@ -69,8 +68,29 @@ def run_once(project_root: Path, pdf_paths: list[Path]) -> dict:
         )
     t_chunk = time.perf_counter() - t_chunk_start
 
+    embedding_mode = "measured"
+    embedding_error = None
+    embedding_dimension = 0
+
     t_embed_start = time.perf_counter()
-    embeddings = embedder.encode_documents([c.text for c in chunks])
+    try:
+        embedder = EmbeddingModel()
+        embeddings = embedder.encode_documents([c.text for c in chunks])
+        embedding_dimension = int(embeddings.shape[1]) if len(embeddings.shape) == 2 else 0
+    except Exception as exc:
+        embedding_mode = "synthetic_fallback"
+        embedding_error = str(exc)
+        existing_index = project_root / "vector_store" / "sbi.index"
+        if not existing_index.exists():
+            raise RuntimeError(
+                "Embedding model is unavailable and no existing FAISS index found "
+                "to infer embedding dimension."
+            ) from exc
+        embedding_dimension = faiss.read_index(str(existing_index)).d
+        rng = np.random.default_rng(seed=42)
+        embeddings = rng.normal(size=(len(chunks), embedding_dimension)).astype(np.float32)
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / np.maximum(norms, 1e-12)
     t_embed = time.perf_counter() - t_embed_start
 
     t_index_start = time.perf_counter()
@@ -103,7 +123,9 @@ def run_once(project_root: Path, pdf_paths: list[Path]) -> dict:
             "chunk_count": len(chunks),
             "average_chunk_size_chars": statistics.fmean(chunk_sizes) if chunk_sizes else 0.0,
             "max_chunk_size_chars": max(chunk_sizes) if chunk_sizes else 0,
-            "embedding_dimension": int(embeddings.shape[1]) if len(embeddings.shape) == 2 else 0,
+            "embedding_dimension": embedding_dimension,
+            "embedding_metric_mode": embedding_mode,
+            "embedding_metric_note": embedding_error,
             "faiss_index_size_bytes": faiss_index_size_bytes,
             "bm25_vocabulary_size": len(getattr(bm25.model, "idf", {})),
         },

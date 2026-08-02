@@ -45,7 +45,6 @@ def benchmark_ingestion_memory(project_root: Path) -> dict:
     loader = PDFLoader()
     processor = TextProcessor()
     chunker = ChunkGenerator()
-    embedder = EmbeddingModel()
     vector = VectorStore()
     bm25 = BM25Store()
 
@@ -64,12 +63,16 @@ def benchmark_ingestion_memory(project_root: Path) -> dict:
         chunks.extend(chunker.create_chunks(cleaned, "SBI", "Home Loan", path.name))
     peak = max(peak, rss_bytes())
 
-    embeddings = embedder.encode_documents([c.text for c in chunks])
-    peak = max(peak, rss_bytes())
-
-    vector.build(embeddings, chunks)
-    bm25.build(chunks)
-    peak = max(peak, rss_bytes())
+    embedding_note = None
+    try:
+        embedder = EmbeddingModel()
+        embeddings = embedder.encode_documents([c.text for c in chunks])
+        peak = max(peak, rss_bytes())
+        vector.build(embeddings, chunks)
+        bm25.build(chunks)
+        peak = max(peak, rss_bytes())
+    except Exception as exc:
+        embedding_note = str(exc)
 
     end = rss_bytes()
 
@@ -80,6 +83,7 @@ def benchmark_ingestion_memory(project_root: Path) -> dict:
         "end_rss_mb": mb(end),
         "peak_rss_mb": mb(peak),
         "delta_rss_mb": mb(end - baseline),
+        "embedding_note": embedding_note,
     }
 
 
@@ -91,10 +95,16 @@ def benchmark_retrieval_memory() -> dict:
     vector.load()
     bm25 = BM25Store()
     bm25.load()
-    embedder = EmbeddingModel()
-    hybrid = HybridRetriever(vector, bm25, embedder)
-    reranker = Reranker()
-    peak = max(peak, rss_bytes())
+    query_execution_note = None
+    try:
+        embedder = EmbeddingModel()
+        hybrid = HybridRetriever(vector, bm25, embedder)
+        reranker = Reranker()
+        peak = max(peak, rss_bytes())
+    except Exception as exc:
+        query_execution_note = str(exc)
+        hybrid = None
+        reranker = None
 
     queries = [
         "What is the LTV ratio for 20 lacs?",
@@ -103,8 +113,11 @@ def benchmark_retrieval_memory() -> dict:
     ]
 
     for query in queries:
-        docs = hybrid.search(query, top_k=10)
-        _ = reranker.rerank(query, docs, top_k=5)
+        if hybrid is not None and reranker is not None:
+            docs = hybrid.search(query, top_k=10)
+            _ = reranker.rerank(query, docs, top_k=5)
+        else:
+            _ = bm25.search(query, top_k=10)
         peak = max(peak, rss_bytes())
 
     end = rss_bytes()
@@ -114,6 +127,7 @@ def benchmark_retrieval_memory() -> dict:
         "end_rss_mb": mb(end),
         "peak_rss_mb": mb(peak),
         "delta_rss_mb": mb(end - baseline),
+        "query_execution_note": query_execution_note,
     }
 
 

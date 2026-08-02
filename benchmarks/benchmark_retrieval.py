@@ -10,6 +10,8 @@ import statistics
 import time
 from pathlib import Path
 
+import numpy as np
+
 from rag.bm25_store import BM25Store
 from rag.embedding import EmbeddingModel
 from rag.hybrid import HybridRetriever
@@ -59,9 +61,21 @@ def run_latency(queries: list[str], repeats: int, top_k: int) -> dict:
     bm25 = BM25Store()
     bm25.load()
 
-    embedder = EmbeddingModel()
-    hybrid = HybridRetriever(vector, bm25, embedder)
-    reranker = Reranker()
+    embedder = None
+    reranker = None
+    embedder_error = None
+    reranker_error = None
+    try:
+        embedder = EmbeddingModel()
+        hybrid = HybridRetriever(vector, bm25, embedder)
+    except Exception as exc:
+        embedder_error = str(exc)
+        hybrid = None
+
+    try:
+        reranker = Reranker()
+    except Exception as exc:
+        reranker_error = str(exc)
 
     vector_latencies = []
     bm25_latencies = []
@@ -71,7 +85,12 @@ def run_latency(queries: list[str], repeats: int, top_k: int) -> dict:
 
     for _ in range(repeats):
         for query in queries:
-            embedding = embedder.encode_query(query)
+            if embedder is not None:
+                embedding = embedder.encode_query(query)
+            else:
+                rng = np.random.default_rng(abs(hash(query)) % (2**32))
+                embedding = rng.normal(size=(vector.index.d,)).astype(np.float32)
+                embedding /= max(np.linalg.norm(embedding), 1e-12)
 
             start = time.perf_counter()
             _ = vector.search(embedding, top_k=top_k)
@@ -81,19 +100,38 @@ def run_latency(queries: list[str], repeats: int, top_k: int) -> dict:
             _ = bm25.search(query, top_k=top_k)
             bm25_latencies.append(time.perf_counter() - start)
 
-            start = time.perf_counter()
-            hybrid_docs = hybrid.search(query, top_k=top_k)
-            hybrid_elapsed = time.perf_counter() - start
+            if hybrid is not None:
+                start = time.perf_counter()
+                hybrid_docs = hybrid.search(query, top_k=top_k)
+                hybrid_elapsed = time.perf_counter() - start
+            else:
+                start = time.perf_counter()
+                vector_results = vector.search(embedding, top_k=top_k)
+                bm25_results = bm25.search(query, top_k=top_k)
+                merged = [(item["metadata"], item["score"]) for item in vector_results]
+                merged.extend((chunk, float(score)) for chunk, score in bm25_results)
+                seen = {}
+                for chunk, score in merged:
+                    seen[chunk.chunk_id] = (chunk, score)
+                hybrid_docs = list(seen.values())[:top_k]
+                hybrid_elapsed = time.perf_counter() - start
             hybrid_latencies.append(hybrid_elapsed)
 
-            start = time.perf_counter()
-            _ = reranker.rerank(query, hybrid_docs, top_k=top_k)
-            rerank_elapsed = time.perf_counter() - start
-            rerank_latencies.append(rerank_elapsed)
+            if reranker is not None:
+                start = time.perf_counter()
+                _ = reranker.rerank(query, hybrid_docs, top_k=top_k)
+                rerank_elapsed = time.perf_counter() - start
+                rerank_latencies.append(rerank_elapsed)
+            else:
+                rerank_elapsed = 0.0
 
             total_latencies.append(hybrid_elapsed + rerank_elapsed)
 
     return {
+        "embedding_backend": "model" if embedder is not None else "synthetic_query_vectors",
+        "embedding_backend_note": embedder_error,
+        "reranker_backend": "model" if reranker is not None else "not_measured",
+        "reranker_backend_note": reranker_error,
         "vector_search_latency_seconds": summarize(vector_latencies),
         "bm25_search_latency_seconds": summarize(bm25_latencies),
         "hybrid_retrieval_latency_seconds": summarize(hybrid_latencies),
@@ -217,10 +255,17 @@ def main() -> None:
             "reason": "Ground truth file not provided. Use --write-template to generate a template and then fill relevant_chunk_ids.",
         }
     else:
-        report["quality"] = {
-            "status": "measured",
-            "metrics": evaluate_quality(gt, top_k=args.top_k),
-        }
+        try:
+            metrics = evaluate_quality(gt, top_k=args.top_k)
+            report["quality"] = {"status": "measured", "metrics": metrics}
+        except Exception as exc:
+            report["quality"] = {
+                "status": "not_measured",
+                "reason": (
+                    "Quality evaluation requires embedding and reranker models. "
+                    f"Current error: {exc}"
+                ),
+            }
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
